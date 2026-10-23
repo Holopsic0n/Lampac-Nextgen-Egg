@@ -1,19 +1,24 @@
 {
     "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PANEL",
     "meta": {
-        "version": "0.02",
+        "version": "PLCN_v3",
         "update_url": "https://raw.githubusercontent.com/Holopsic0n/Lampac-Nextgen-Egg/refs/heads/main/egg-lampac-nextgen.json"
     },
-    "exported_at": "2026-10-23T00:48:22+00:00",
-    "name": "Lampac NextGen",
+    "exported_at": "2026-10-23T15:59:40+00:00",
+    "name": "Lampac-NextGen",
     "author": "holopsicon@example.com",
+    "uuid": "0fe4b715-bc4e-4f0b-96cd-001248063b10",
     "description": "Lampac NextGen - media aggregator (ASP.NET Core, .NET 10). Installed from the official GitHub release zip; the port from the allocation is written to init.conf on every start.",
-    "features": null,
+    "icon": null,
+    "tags": [],
+    "features": [],
     "docker_images": {
         "Lampac (dotnet 10 + Chrome)": "ghcr.io/holopsic0n/lampac-pelican:latest"
     },
     "file_denylist": [],
-    "startup": "[ \"{{AUTO_UPDATE}}\" = \"1\" ] && bash ./lampac-update.sh; dotnet Core.dll",
+    "startup_commands": {
+        "Default": "[ \"{{AUTO_UPDATE}}\" = \"1\" ] && bash ./lampac-update.sh; dotnet Core.dll"
+    },
     "config": {
         "files": "{\n    \"init.conf\": {\n        \"parser\": \"json\",\n        \"find\": {\n            \"listen.port\": \"{{server.allocations.default.port}}\"\n        }\n    }\n}",
         "startup": "{\n    \"done\": [\n        \"Configure complete\",\n        \"Now listening on\"\n    ]\n}",
@@ -29,55 +34,71 @@
     },
     "variables": [
         {
+            "sort": 1,
             "name": "Lampac version",
             "description": "Release tag (e.g. v1.2.3) or 'latest'. With Auto update on, the server follows this on each start; user data is kept.",
             "env_variable": "LAMPAC_VERSION",
             "default_value": "latest",
             "user_viewable": true,
             "user_editable": true,
-            "rules": "required|string|max:64",
-            "field_type": "text"
+            "rules": [
+                "required",
+                "string",
+                "max:64"
+            ]
         },
         {
+            "sort": 2,
             "name": "Auto update",
             "description": "1 = on every server start check GitHub for a new release (matching 'Lampac version') and update before launching. If the check fails the installed version still starts.",
             "env_variable": "AUTO_UPDATE",
             "default_value": "1",
             "user_viewable": true,
             "user_editable": true,
-            "rules": "required|in:0,1",
-            "field_type": "text"
+            "rules": [
+                "required",
+                "in:0,1"
+            ]
         },
         {
+            "sort": 3,
             "name": "Root password",
             "description": "Optional. Written to the 'passwd' file on install (used by WebLog/admin endpoints). If empty, Lampac generates a random one on first start (see the 'passwd' file).",
             "env_variable": "ROOT_PASSWORD",
             "default_value": "",
             "user_viewable": true,
             "user_editable": true,
-            "rules": "nullable|string|max:128",
-            "field_type": "text"
+            "rules": [
+                "nullable",
+                "string",
+                "max:128"
+            ]
         },
         {
+            "sort": 4,
             "name": "Install FFmpeg",
             "description": "1 = download static ffmpeg/ffprobe into data/ on install (needed only for the Transcoding module).",
             "env_variable": "INSTALL_FFMPEG",
             "default_value": "0",
             "user_viewable": true,
             "user_editable": true,
-            "rules": "required|in:0,1",
-            "field_type": "text"
+            "rules": [
+                "required",
+                "in:0,1"
+            ]
         },
         {
+            "sort": 5,
             "name": "Telemetry opt-out",
             "description": "Disable .NET CLI telemetry.",
             "env_variable": "DOTNET_CLI_TELEMETRY_OPTOUT",
             "default_value": "1",
             "user_viewable": true,
             "user_editable": false,
-            "rules": "required|in:0,1",
-            "field_type": "text"
+            "rules": [
+                "required",
+                "in:0,1"
+            ]
         }
     ],
-    "uuid": "0fe4b715-bc4e-4f0b-96cd-001248063b10"
 }
