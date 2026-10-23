@@ -1,0 +1,83 @@
+{
+    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PANEL",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-10-23T00:48:22+00:00",
+    "name": "Lampac NextGen",
+    "author": "holopsicon@example.com",
+    "description": "Lampac NextGen - media aggregator (ASP.NET Core, .NET 10). Installed from the official GitHub release zip; the port from the allocation is written to init.conf on every start.",
+    "features": null,
+    "docker_images": {
+        "Lampac (dotnet 10 + Chrome)": "ghcr.io/holopsic0n/lampac-pelican:latest"
+    },
+    "file_denylist": [],
+    "startup": "[ \"{{AUTO_UPDATE}}\" = \"1\" ] && bash ./lampac-update.sh; dotnet Core.dll",
+    "config": {
+        "files": "{\n    \"init.conf\": {\n        \"parser\": \"json\",\n        \"find\": {\n            \"listen.port\": \"{{server.allocations.default.port}}\"\n        }\n    }\n}",
+        "startup": "{\n    \"done\": [\n        \"Configure complete\",\n        \"Now listening on\"\n    ]\n}",
+        "logs": "{}",
+        "stop": "^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\n# Lampac NextGen installer for Pelican/Pterodactyl.\n# Writes lampac-update.sh (also run on every server start when AUTO_UPDATE=1) and runs it once.\nset -e\n\nexport DEBIAN_FRONTEND=noninteractive\nNEED=\"\"\nfor c in curl unzip; do command -v \"$c\" >/dev/null 2>&1 || NEED=\"$NEED $c\"; done\nif [ -n \"$NEED\" ]; then\n  apt-get update -qq\n  apt-get install -y -qq --no-install-recommends ca-certificates $NEED\nfi\n\nmkdir -p /mnt/server\ncd /mnt/server\n\ncat > /mnt/server/lampac-update.sh <<'LAMPAC_UPDATE_EOF'\n#!/bin/bash\n# Installs/updates Lampac NextGen from GitHub releases. Only release files are overwritten;\n# user data (init.conf, passwd, *.db, mods/, cache/, wwwroot/, ...) is not part of the release and is kept.\n# Version comes from $LAMPAC_VERSION (\"latest\" or a tag). Set FORCE=1 to reinstall the same version.\nset -e\ncd \"$(dirname \"$0\")\"\n\nREPO=\"lampac-nextgen/lampac\"\nZIP=\"lampac-nextgen.zip\"\nWANT=\"${LAMPAC_VERSION:-latest}\"\n\nif [ -z \"$WANT\" ] || [ \"$WANT\" = \"latest\" ]; then\n  # The first redirect of /releases/latest/download/<asset> points at .../releases/download/<TAG>/<asset>\n  TAG=\"$(curl -fsSI --retry 3 \"https://github.com/${REPO}/releases/latest/download/${ZIP}\" | tr -d '\\r' \\\n    | awk -F/ 'tolower($1) ~ /^location:/ { for (i=1;i<NF;i++) if ($i==\"download\") { print $(i+1); exit } }')\"\n  [ -n \"$TAG\" ] || { echo \"update: cannot resolve latest release\"; exit 1; }\nelse\n  TAG=\"\"\n  for t in \"$WANT\" \"v${WANT#v}\" \"${WANT#v}\"; do\n    if curl -fsIL -o /dev/null \"https://github.com/${REPO}/releases/download/${t}/${ZIP}\"; then TAG=\"$t\"; break; fi\n  done\n  [ -n \"$TAG\" ] || { echo \"update: release '${WANT}' with asset ${ZIP} not found\"; exit 1; }\nfi\n\nCUR=\"$(cat version.txt 2>/dev/null || true)\"\nif [ \"$CUR\" = \"$TAG\" ] && [ -f Core.dll ] && [ \"${FORCE:-0}\" != \"1\" ]; then\n  echo \"Lampac ${TAG} is up to date\"\n  exit 0\nfi\n\necho \"Lampac: ${CUR:-none} -> ${TAG}\"\n# Work inside the server dir: /tmp may be a small tmpfs\nmkdir -p .update\ntrap 'rm -rf .update' EXIT\ncurl -fSL --retry 3 -o .update/release.zip \"https://github.com/${REPO}/releases/download/${TAG}/${ZIP}\"\n[ -s .update/release.zip ] || { echo \"update: empty archive\"; exit 1; }\nunzip -oq .update/release.zip -d .update/x\nrm -f .update/release.zip\n\n# Flatten if the archive has a single root folder\nif [ ! -f .update/x/Core.dll ]; then\n  SUB=\"$(find .update/x -mindepth 1 -maxdepth 1 -type d | head -n1)\"\n  [ -n \"$SUB\" ] && [ -f \"$SUB/Core.dll\" ] || { echo \"update: Core.dll not found in archive\"; exit 1; }\n  mv \"$SUB\" .update/x2 && rm -rf .update/x && mv .update/x2 .update/x\nfi\n\nshopt -s dotglob nullglob\ncp -a .update/x/* ./\nshopt -u dotglob nullglob\necho \"$TAG\" > version.txt\necho \"Lampac ${TAG} installed\"\nLAMPAC_UPDATE_EOF\nchmod +x /mnt/server/lampac-update.sh\n\nFORCE=1 bash /mnt/server/lampac-update.sh\n\n# Minimal init.conf - merged over the built-in base.conf. Port is kept in sync by the panel on every start.\nif [ ! -f /mnt/server/init.conf ]; then\n  cat > /mnt/server/init.conf <<'EOF'\n{\n  \"listen\": {\n    \"ip\": \"any\",\n    \"port\": 9118\n  },\n  \"chromium\": {\n    \"enable\": true,\n    \"executablePath\": \"/usr/bin/chromium\"\n  }\n}\nEOF\n  echo \"Created default init.conf\"\nfi\n\n# Root password (optional)\nif [ -n \"${ROOT_PASSWORD}\" ]; then\n  printf '%s' \"${ROOT_PASSWORD}\" > /mnt/server/passwd\n  echo \"passwd written from ROOT_PASSWORD\"\nfi\n\n# FFmpeg (optional, only needed for the Transcoding module)\nif [ \"${INSTALL_FFMPEG}\" = \"1\" ]; then\n  case \"$(uname -m)\" in\n    x86_64|amd64)  FF=\"ffmpeg-master-latest-linux64-gpl\" ;;\n    aarch64|arm64) FF=\"ffmpeg-master-latest-linuxarm64-gpl\" ;;\n    *) FF=\"\" ;;\n  esac\n  if [ -n \"$FF\" ]; then\n    command -v xz >/dev/null 2>&1 || { apt-get update -qq; apt-get install -y -qq --no-install-recommends xz-utils; }\n    mkdir -p /mnt/server/data\n    curl -fSL --retry 3 -o /tmp/ffmpeg.tar.xz \"https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/${FF}.tar.xz\"\n    tar -xJf /tmp/ffmpeg.tar.xz -C /tmp --wildcards \"*/bin/ffmpeg\" \"*/bin/ffprobe\" --strip-components=2\n    mv -f /tmp/ffmpeg /tmp/ffprobe /mnt/server/data/\n    chmod +x /mnt/server/data/ffmpeg /mnt/server/data/ffprobe\n    rm -f /tmp/ffmpeg.tar.xz\n    echo \"FFmpeg installed to data/\"\n  fi\nfi\n\necho \"Done.\"\n",
+            "container": "ghcr.io/parkervcp/installers:debian",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Lampac version",
+            "description": "Release tag (e.g. v1.2.3) or 'latest'. With Auto update on, the server follows this on each start; user data is kept.",
+            "env_variable": "LAMPAC_VERSION",
+            "default_value": "latest",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:64",
+            "field_type": "text"
+        },
+        {
+            "name": "Auto update",
+            "description": "1 = on every server start check GitHub for a new release (matching 'Lampac version') and update before launching. If the check fails the installed version still starts.",
+            "env_variable": "AUTO_UPDATE",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:0,1",
+            "field_type": "text"
+        },
+        {
+            "name": "Root password",
+            "description": "Optional. Written to the 'passwd' file on install (used by WebLog/admin endpoints). If empty, Lampac generates a random one on first start (see the 'passwd' file).",
+            "env_variable": "ROOT_PASSWORD",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:128",
+            "field_type": "text"
+        },
+        {
+            "name": "Install FFmpeg",
+            "description": "1 = download static ffmpeg/ffprobe into data/ on install (needed only for the Transcoding module).",
+            "env_variable": "INSTALL_FFMPEG",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:0,1",
+            "field_type": "text"
+        },
+        {
+            "name": "Telemetry opt-out",
+            "description": "Disable .NET CLI telemetry.",
+            "env_variable": "DOTNET_CLI_TELEMETRY_OPTOUT",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": false,
+            "rules": "required|in:0,1",
+            "field_type": "text"
+        }
+    ],
+    "uuid": "0fe4b715-bc4e-4f0b-96cd-001248063b10"
+}
